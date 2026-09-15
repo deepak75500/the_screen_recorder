@@ -212,8 +212,8 @@ def _reap_stale_sessions():
 
 
 def _safe_filename_component() -> str:
-    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return f"Screen_Recording_{ts}.webm"
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+    return f"Screen_Recording_{ts}_{uuid.uuid4().hex[:8]}.webm"
 
 
 # ---------------------------------------------------------------------------
