@@ -26,6 +26,7 @@
 
     <div class="buttons">
       <button id="start-btn">Start Recording</button>
+      <button id="pause-btn" disabled>Pause</button>
       <button id="stop-btn" disabled>Stop Recording</button>
     </div>
 
@@ -50,6 +51,7 @@
       <div>Google Drive:</div>
       <a id="drive-link" href="#" target="_blank" rel="noopener" hidden>Open Recording</a>
       <span id="drive-pending" class="muted">Not uploaded yet</span>
+      <div id="drive-processing" class="processing-text" hidden>Drive may take a moment to process the WebM before playback starts.</div>
     </section>
 
     <div id="error-box" class="error-box" hidden></div>
