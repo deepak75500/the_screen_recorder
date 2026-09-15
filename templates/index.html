@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screen Recorder</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="card">
+    <h1>Screen Recorder</h1>
+
+    <div class="status-row">
+      <span id="status-dot" class="dot dot-ready"></span>
+      <span id="status-text">READY</span>
+    </div>
+
+    <div id="timer" class="timer">00:00:00</div>
+
+    <div class="options">
+      <label>
+        <input type="checkbox" id="mic-toggle" checked>
+        Include microphone audio
+      </label>
+    </div>
+
+    <div class="buttons">
+      <button id="start-btn">Start Recording</button>
+      <button id="stop-btn" disabled>Stop Recording</button>
+    </div>
+
+    <hr>
+
+    <section class="upload-section">
+      <div class="row">
+        <span>Chunks uploaded:</span>
+        <span id="chunks-count">0</span>
+      </div>
+      <div class="row">
+        <span>Pending in queue:</span>
+        <span id="queue-count">0</span>
+      </div>
+      <div id="upload-bar-track" class="progress-track" hidden>
+        <div id="upload-bar-fill" class="progress-fill indeterminate"></div>
+      </div>
+      <div id="upload-status" class="upload-status">Idle</div>
+    </section>
+
+    <section class="drive-section">
+      <div>Google Drive:</div>
+      <a id="drive-link" href="#" target="_blank" rel="noopener" hidden>Open Recording</a>
+      <span id="drive-pending" class="muted">Not uploaded yet</span>
+    </section>
+
+    <div id="error-box" class="error-box" hidden></div>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
