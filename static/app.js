@@ -14,6 +14,7 @@
 
 (() => {
   const startBtn = document.getElementById("start-btn");
+  const pauseBtn = document.getElementById("pause-btn");
   const stopBtn = document.getElementById("stop-btn");
   const micToggle = document.getElementById("mic-toggle");
   const statusDot = document.getElementById("status-dot");
@@ -25,6 +26,7 @@
   const uploadStatusEl = document.getElementById("upload-status");
   const driveLink = document.getElementById("drive-link");
   const drivePending = document.getElementById("drive-pending");
+  const driveProcessing = document.getElementById("drive-processing");
   const errorBox = document.getElementById("error-box");
 
   const CHUNK_INTERVAL_MS = 10000; // "~every 10 seconds", per MediaRecorder.start(timeslice)
@@ -45,23 +47,33 @@
 
   let timerHandle = null;
   let recordingStartedAt = null;
+  let accumulatedElapsedMs = 0;
+  let driveLinkRevealTimer = null;
 
   // -------------------------------------------------------------------
   // UI helpers
   // -------------------------------------------------------------------
+  function setHidden(el, value) {
+    if (el) el.hidden = value;
+  }
+
   function setStatus(kind, text) {
-    statusDot.className = "dot dot-" + kind;
-    statusText.textContent = text;
+    if (statusDot) statusDot.className = "dot dot-" + kind;
+    if (statusText) statusText.textContent = text;
   }
 
   function showError(message) {
-    errorBox.hidden = false;
-    errorBox.textContent = message;
+    if (errorBox) {
+      errorBox.hidden = false;
+      errorBox.textContent = message;
+    }
   }
 
   function clearError() {
-    errorBox.hidden = true;
-    errorBox.textContent = "";
+    if (errorBox) {
+      errorBox.hidden = true;
+      errorBox.textContent = "";
+    }
   }
 
   function formatElapsed(ms) {
@@ -72,22 +84,46 @@
     return `${h}:${m}:${s}`;
   }
 
+  function updateTimerDisplay() {
+    const currentMs = accumulatedElapsedMs + (recordingStartedAt ? Date.now() - recordingStartedAt : 0);
+    timerEl.textContent = formatElapsed(currentMs);
+  }
+
   function startTimer() {
+    accumulatedElapsedMs = 0;
     recordingStartedAt = Date.now();
     timerEl.textContent = "00:00:00";
-    timerHandle = setInterval(() => {
-      timerEl.textContent = formatElapsed(Date.now() - recordingStartedAt);
-    }, 1000);
+    if (timerHandle) clearInterval(timerHandle);
+    timerHandle = setInterval(updateTimerDisplay, 1000);
+  }
+
+  function pauseTimer() {
+    if (recordingStartedAt !== null) {
+      accumulatedElapsedMs += Date.now() - recordingStartedAt;
+      recordingStartedAt = null;
+    }
+    if (timerHandle) clearInterval(timerHandle);
+    timerHandle = null;
+    updateTimerDisplay();
+  }
+
+  function resumeTimer() {
+    recordingStartedAt = Date.now();
+    if (timerHandle) clearInterval(timerHandle);
+    timerHandle = setInterval(updateTimerDisplay, 1000);
+    updateTimerDisplay();
   }
 
   function stopTimer() {
     if (timerHandle) clearInterval(timerHandle);
     timerHandle = null;
+    recordingStartedAt = null;
+    updateTimerDisplay();
   }
 
   function updateQueueUI() {
-    chunksCountEl.textContent = String(chunksUploadedCount);
-    queueCountEl.textContent = String(uploadQueue.length);
+    if (chunksCountEl) chunksCountEl.textContent = String(chunksUploadedCount);
+    if (queueCountEl) queueCountEl.textContent = String(uploadQueue.length);
   }
 
   // -------------------------------------------------------------------
@@ -222,6 +258,29 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function flushRecorderData() {
+    if (!mediaRecorder) return;
+    try {
+      if (mediaRecorder.state === "recording" || mediaRecorder.state === "paused") {
+        mediaRecorder.requestData();
+      }
+    } catch (_) {
+      // Some browsers may throw if a recorder is in a transient state.
+    }
+  }
+
+  function scheduleDriveLinkReveal(fileUrl) {
+    if (driveLinkRevealTimer) clearTimeout(driveLinkRevealTimer);
+    driveLinkRevealTimer = setTimeout(() => {
+      setHidden(driveProcessing, true);
+      setHidden(driveLink, false);
+      if (driveLink) {
+        driveLink.href = fileUrl;
+        driveLink.textContent = "Open Recording";
+      }
+    }, 20000);
+  }
+
   function waitForQueueToDrain() {
     return new Promise((resolve) => {
       const check = () => {
@@ -237,6 +296,10 @@
   // -------------------------------------------------------------------
   async function startRecording() {
     clearError();
+
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      return;
+    }
 
     if (!browserSupportsRecording()) {
       showError("Your browser does not support MediaRecorder. Please use a recent version of Chrome or Edge.");
@@ -317,20 +380,53 @@
 
     setStatus("recording", "RECORDING");
     startTimer();
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    uploadBarTrack.hidden = false;
-    driveLink.hidden = true;
-    drivePending.hidden = false;
-    drivePending.textContent = "Not uploaded yet";
-    uploadStatusEl.textContent = "Recording — uploading chunks as they're created";
+    if (startBtn) startBtn.disabled = true;
+    if (pauseBtn) {
+      pauseBtn.disabled = false;
+      pauseBtn.textContent = "Pause";
+    }
+    if (stopBtn) stopBtn.disabled = false;
+    setHidden(uploadBarTrack, false);
+    setHidden(driveLink, true);
+    setHidden(drivePending, false);
+    if (drivePending) drivePending.textContent = "Not uploaded yet";
+    setHidden(driveProcessing, true);
+    if (uploadStatusEl) uploadStatusEl.textContent = "Recording — uploading chunks as they're created";
+  }
+
+  function togglePauseRecording() {
+    if (!mediaRecorder || mediaRecorder.state === "inactive") return;
+
+    if (mediaRecorder.state === "recording") {
+      flushRecorderData();
+      mediaRecorder.pause();
+      setStatus("paused", "PAUSED");
+      if (pauseBtn) pauseBtn.textContent = "Resume";
+      pauseTimer();
+      if (uploadStatusEl) uploadStatusEl.textContent = "Recording paused.";
+      return;
+    }
+
+    if (mediaRecorder.state === "paused") {
+      mediaRecorder.resume();
+      setStatus("recording", "RECORDING");
+      if (pauseBtn) pauseBtn.textContent = "Pause";
+      resumeTimer();
+      if (uploadStatusEl) uploadStatusEl.textContent = "Recording — uploading chunks as they're created";
+    }
   }
 
   async function stopRecording() {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
 
-    stopBtn.disabled = true;
+    if (pauseBtn) {
+      pauseBtn.disabled = true;
+      pauseBtn.textContent = "Pause";
+    }
+    if (stopBtn) stopBtn.disabled = true;
     setStatus("uploading", "FINALIZING");
+
+    flushRecorderData();
 
     const stopped = new Promise((resolve) => {
       mediaRecorder.addEventListener("stop", resolve, { once: true });
@@ -341,10 +437,10 @@
     stopTimer();
     cleanupStreams();
 
-    uploadStatusEl.textContent = "Waiting for all chunks to finish uploading...";
+    if (uploadStatusEl) uploadStatusEl.textContent = "Waiting for all chunks to finish uploading...";
     await waitForQueueToDrain();
 
-    uploadStatusEl.textContent = "Finalizing Google Drive file...";
+    if (uploadStatusEl) uploadStatusEl.textContent = "Finalizing Google Drive file...";
     try {
       const resp = await fetch("/api/recording/stop", {
         method: "POST",
@@ -357,22 +453,34 @@
       }
 
       setStatus("done", "DONE");
-      uploadStatusEl.textContent = "Upload complete.";
-      drivePending.hidden = true;
-      driveLink.hidden = false;
-      driveLink.href = payload.file_url;
+      if (uploadStatusEl) uploadStatusEl.textContent = "Upload complete.";
+      setHidden(drivePending, true);
+      setHidden(driveProcessing, false);
+      setHidden(driveLink, true);
+      if (driveLink) {
+        driveLink.href = payload.file_url;
+        driveLink.textContent = "Open Recording";
+      }
+      scheduleDriveLinkReveal(payload.file_url);
     } catch (err) {
       setStatus("error", "ERROR");
       showError(`Could not finalize the Google Drive upload: ${err.message}`);
     } finally {
-      startBtn.disabled = false;
+      if (startBtn) startBtn.disabled = false;
+      if (pauseBtn) pauseBtn.disabled = true;
     }
   }
 
   function cleanupStreams() {
+    if (driveLinkRevealTimer) {
+      clearTimeout(driveLinkRevealTimer);
+      driveLinkRevealTimer = null;
+    }
     [displayStream, micStream].forEach((stream) => {
       if (stream) stream.getTracks().forEach((track) => track.stop());
     });
+    setHidden(driveProcessing, true);
+    setHidden(driveLink, true);
     displayStream = null;
     micStream = null;
     combinedStream = null;
@@ -385,11 +493,12 @@
   // -------------------------------------------------------------------
   // Wire up buttons
   // -------------------------------------------------------------------
-  startBtn.addEventListener("click", startRecording);
-  stopBtn.addEventListener("click", stopRecording);
+  if (startBtn) startBtn.addEventListener("click", startRecording);
+  if (pauseBtn) pauseBtn.addEventListener("click", togglePauseRecording);
+  if (stopBtn) stopBtn.addEventListener("click", stopRecording);
 
   if (!browserSupportsRecording()) {
     showError("Your browser does not support MediaRecorder. Please use a recent version of Chrome or Edge.");
-    startBtn.disabled = true;
+    if (startBtn) startBtn.disabled = true;
   }
 })();
