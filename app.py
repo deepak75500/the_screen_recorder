@@ -57,7 +57,6 @@ def get_secret(name: str) -> str:
 
     result = (
         supabase
-        .schema("private")
         .table("app_secrets")
         .select("encrypted_value")
         .eq("key", name)
