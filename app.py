@@ -95,9 +95,9 @@ app = Flask(__name__)
 import os
 
 # Fetch secrets directly from Render's environment variables
-GOOGLE_CLIENT_ID = os.getenv.get("GOOGLE_CLIENT_ID").strip()
-GOOGLE_CLIENT_SECRET = os.getenv.get("GOOGLE_CLIENT_SECRET").strip()
-GOOGLE_REFRESH_TOKEN = os.getenv.get("GOOGLE_REFRESH_TOKEN").strip()
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID").strip()
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET").strip()
+GOOGLE_REFRESH_TOKEN = os.environ.get("GOOGLE_REFRESH_TOKEN").strip()
 
 GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "").strip()
 
