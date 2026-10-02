@@ -29,7 +29,58 @@ from dotenv import load_dotenv
 import requests as http
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request as GoogleAuthRequest
+import os
+from functools import lru_cache
 
+from cryptography.fernet import Fernet
+from supabase import create_client, Client
+
+
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+SECRET_ENCRYPTION_KEY = os.environ["SECRET_ENCRYPTION_KEY"]
+
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+)
+
+
+cipher = Fernet(
+    SECRET_ENCRYPTION_KEY.encode()
+)
+
+
+@lru_cache(maxsize=10)
+def get_secret(name: str) -> str:
+
+    result = (
+        supabase
+        .schema("private")
+        .table("app_secrets")
+        .select("encrypted_value")
+        .eq("key", name)
+        .single()
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError(
+            f"Secret '{name}' was not found"
+        )
+
+    encrypted_value = result.data["encrypted_value"]
+
+    try:
+        return cipher.decrypt(
+            encrypted_value.encode()
+        ).decode()
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not decrypt secret '{name}'"
+        ) from exc
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -40,9 +91,19 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 # Configuration (from .env — never hard-code secrets)
 # ---------------------------------------------------------------------------
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REFRESH_TOKEN = os.environ.get("GOOGLE_REFRESH_TOKEN", "")
+
+
+GOOGLE_CLIENT_ID = get_secret(
+    "GOOGLE_CLIENT_ID"
+)
+
+GOOGLE_CLIENT_SECRET = get_secret(
+    "GOOGLE_CLIENT_SECRET"
+)
+
+GOOGLE_REFRESH_TOKEN = get_secret(
+    "GOOGLE_REFRESH_TOKEN"
+)
 GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "").strip()
 
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
