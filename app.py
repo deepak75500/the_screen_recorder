@@ -92,17 +92,13 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 
 
-GOOGLE_CLIENT_ID = get_secret(
-    "GOOGLE_CLIENT_ID"
-)
+import os
 
-GOOGLE_CLIENT_SECRET = get_secret(
-    "GOOGLE_CLIENT_SECRET"
-)
+# Fetch secrets directly from Render's environment variables
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN")
 
-GOOGLE_REFRESH_TOKEN = get_secret(
-    "GOOGLE_REFRESH_TOKEN"
-)
 GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "").strip()
 
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
